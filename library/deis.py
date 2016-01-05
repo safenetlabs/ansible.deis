@@ -47,9 +47,9 @@ def main():
             rc, resp, err = module.run_command(cmd)
             os.remove('/opt/bin/install.sh')
             if rc == 0:
-                module.exit_json(changed=True, msg="DEIS Installed successfully")
+                module.exit_json(changed=True, msg="DEIS installed successfully")
             else:
-                module.exit_json(changed=False, cmd=cmd, rc=rc, stderr=err, msg="Error occurred while installing DEIS")
+                module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while installing DEIS")
 
     elif action == 'register':
         if username is None or password is None or email is None:
@@ -87,18 +87,18 @@ def main():
 
     elif action == 'create':
         if app is None:
-            module.fail_json(msg="App Name not provided")
+            module.fail_json(msg="App name not provided")
         else:
             cmd = deis + " apps:create --no-remote " + app
             rc, resp, err = module.run_command(cmd)
 
             if rc == 0:
-                module.exit_json(changed=True, msg="App " + app + " Created Successful", stdout=resp)
+                module.exit_json(changed=True, msg=app + " created successfully", stdout=resp)
 
             if "This field must be unique" in err:
-                module.exit_json(changed=False, msg="App " + app + " already exists")
+                module.exit_json(changed=False, msg=app + " already exists")
             else:
-                module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while creating app " + app)
+                module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while creating " + app)
 
     elif action == 'configure':
         if app is None or config_vars is None:
@@ -148,9 +148,9 @@ def main():
             if not set_changes and not unset_changes:
                 module.exit_json(changed=False, msg="Configuration up-to-date")
             elif set_rc == 0 and unset_rc == 0:
-                module.exit_json(changed=True, msg="App configured Successfully")
+                module.exit_json(changed=True, msg=app + " configured Successfully")
             else:
-                module.fail_json(changed=False, msg="Error occurred while configuring app " + app)
+                module.fail_json(changed=False, msg="Error occurred while configuring " + app)
 
     elif action == 'pull':
         if app is None or app_ver is None or source is None:
@@ -171,9 +171,9 @@ def main():
                 rc, resp, err = module.run_command(cmd)
 
                 if rc == 0:
-                    module.exit_json(changed=True, msg=app + " deployed Successfully")
+                    module.exit_json(changed=True, msg=app + " deployed successfully")
                 else:
-                    module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while deploying app " + app)
+                    module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while deploying " + app)
             else:
                 module.exit_json(changed=False, msg="Latest version already deployed")
 

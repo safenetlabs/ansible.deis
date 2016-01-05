@@ -31,7 +31,7 @@ def main():
         if rc == 0:
             module.exit_json(changed=True, msg="Units refreshed successfully")
         else:
-            module.exit_json(changed=False, cmd=cmd, rc=rc, stderr=err, msg="Error refreshing units")
+            module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error refreshing units")
 
     elif action == 'configure':
         config_dict = {'domain': domain, 'unitHostname': unit_hostname, 'drain': drain}
@@ -64,7 +64,7 @@ def main():
             start_rc, start_resp, start_err = module.run_command(start_cmd)
 
             if rc == 0 and start_rc == 0:
-                module.exit_json(changed=True, msg="Platform Installed and started successfully")
+                module.exit_json(changed=True, msg="Platform installed and started successfully")
             elif rc != 0:
                 module.exit_json(changed=False, cmd=cmd, rc=rc, stderr=err, msg="Error occurred while installing platform")
             elif start_rc != 0:
