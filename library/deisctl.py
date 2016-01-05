@@ -26,7 +26,7 @@ def main():
         module.fail_json(msg="No action provided")
 
     elif action == 'refresh':
-        cmd = 'deisctl refresh-units'
+        cmd = deisctl + ' refresh-units'
         rc, resp, err = module.run_command(cmd)
         if rc == 0:
             module.exit_json(changed=True, msg="Units refreshed successfully")
