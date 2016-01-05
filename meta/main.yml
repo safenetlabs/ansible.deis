@@ -1,5 +1,0 @@
----
-galaxy_info:
-  author: Gaurav Khunger
-  description: Custom modules to configure deis and deisctl
-dependencies: []
