@@ -18,6 +18,8 @@ def main():
             app_ver=dict(type='str', required=False),
             scale=dict(type='str', required=False),
             source=dict(type='str', required=False),
+            certfile=dict(type='str', required=False),
+            keyfile=dict(type='str', required=False)
         )
     )
 
@@ -32,6 +34,8 @@ def main():
     app_ver = module.params['app_ver']
     scale = module.params['scale']
     source = module.params['source']
+    certfile = module.params['certfile']
+    keyfile = module.params['keyfile']
     deis = "/opt/bin/deis"
 
     if action == '':
@@ -84,6 +88,15 @@ def main():
                     module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while logging in")
             else:
                     module.exit_json(changed=False, msg="Already logged in")
+
+    elif action == 'logout':
+        cmd = deis + " logout"
+        rc, resp, err = module.run_command(cmd)
+
+        if rc == 0:
+            module.exit_json(changed=True, msg="Logout Successful", stdout=resp)
+        else:
+            module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while logging out")
 
     elif action == 'create':
         if app is None:
@@ -236,8 +249,33 @@ def main():
                 else:
                     module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while assigning admin rights to " + username)
 
+    elif action == 'add_cert':
+        if certfile is None or keyfile is None:
+            module.fail_json(msg="keyfile or certfile not provided")
+        else:
+            cmd = deis +  " certs:add " + certfile + " " + keyfile
+
+            rc, resp, err = module.run_command(cmd)
+            if rc == 0:
+                module.exit_json(changed=True, msg="User " + username + " successfully added certificate")
+            else:
+                module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while adding certificate")
+
+    elif action == 'add_key':
+        if certfile is None:
+            module.fail_json(msg="certfile not provided")
+        else:
+            cmd = deis + ' keys:add ' + certfile
+            rc, resp, err = module.run_command(cmd)
+            if rc == 0:
+                module.exit_json(changed=True, msg="Successfully added key")
+            elif "This field must be unique" in err:
+                module.exit_json(changed=False, msg="Key already exists")
+            else:
+                module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while adding key")
     else:
         module.fail_json(changed=False, msg="Invalid Action")
+
 
 
 def __count_container(info, app):
