@@ -257,7 +257,9 @@ def main():
 
             rc, resp, err = module.run_command(cmd)
             if rc == 0:
-                module.exit_json(changed=True, msg="User " + username + " successfully added certificate")
+                module.exit_json(changed=True, msg="Successfully added certificate")
+            elif "500 INTERNAL SERVER ERROR" in err:
+                module.exit_json(changed=False, stderr=err, msg="Key PROBABLY already exists - no good way to tell from command error.")
             else:
                 module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while adding certificate")
 
