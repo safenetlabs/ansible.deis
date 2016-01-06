@@ -73,7 +73,20 @@ def main():
         else:
             is_logged_in = deis + " whoami"
             rc, resp, err = module.run_command(is_logged_in)
-            if rc == 1:
+
+            is_user_same = False
+            if rc == 0:
+                user_logged_in = resp[resp.index('You are ')+8:resp.index(' at http')]
+                if user_logged_in == username:
+                    is_user_same = True
+
+            if rc == 1 or not is_user_same:
+                if not is_user_same:
+                    cmd = deis + " logout"
+                    rc, resp, err = module.run_command(cmd)
+                    if rc != 0:
+                        module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while logging out")
+
                 full_action = "auth:login deis." + domain
                 cmd = deis + " " + full_action + " --username=" + username + " --password=" + password
                 rc, resp, err = module.run_command(cmd)
