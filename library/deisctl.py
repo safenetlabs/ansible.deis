@@ -5,12 +5,13 @@ def main():
 
     module = AnsibleModule(
         argument_spec=dict(
-            action=dict(type='str', required=False),
+            action=dict(type='str', required=True),
             domain=dict(type='str', required=False),
             unit_hostname=dict(type='str', required=False),
             drain=dict(type='str', required=False),
             units=dict(type='str', required=False),
             target=dict(type='str', required=False),
+            config=dict(type='dict', required=False),
         )
     )
 
@@ -20,6 +21,7 @@ def main():
     drain = module.params['drain']
     units = module.params['units']
     target = module.params['target']
+    config = module.params['config']
     deisctl = "/opt/bin/deisctl"
 
     if action == '':
@@ -34,22 +36,24 @@ def main():
             module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error refreshing units")
 
     elif action == 'configure':
-        config_dict = {'domain': domain, 'unitHostname': unit_hostname, 'drain': drain}
-        is_changed = False
-        for key, val in config_dict.iteritems():
-            get_config = deisctl + ' config platform get ' + key
-            rc, resp, err = module.run_command(get_config)
-            if resp.rstrip() != val:
-                cmd = deisctl + ' config platform set ' + key + '=' + val
-                rc, resp, err = module.run_command(cmd)
-                if rc != 0:
-                    module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while configuring platform")
-                is_changed = True
-
-        if is_changed:
-            module.exit_json(changed=True, msg="Platform configured successfully")
+        if target is None:
+            module.fail_json(msg="target not provided")
         else:
-            module.exit_json(changed=False, msg="Configuration up-to-date")
+            is_changed = False
+            for key, val in config.iteritems():
+                get_config = deisctl + ' config ' + target + ' get ' + key
+                rc, resp, err = module.run_command(get_config)
+                if resp.rstrip() != val:
+                    cmd = deisctl + ' config ' + target + ' set ' + key + '=' + val
+                    rc, resp, err = module.run_command(cmd)
+                    if rc != 0:
+                        module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while configuring platform")
+                    is_changed = True
+
+            if is_changed:
+                module.exit_json(changed=True, msg="Platform configured successfully")
+            else:
+                module.exit_json(changed=False, msg="Configuration up-to-date")
 
     elif action == 'install_platform':
         cmd = deisctl + ' status deis-database.service'
@@ -80,9 +84,9 @@ def main():
             rc, resp, err = module.run_command(cmd)
 
             if rc == 0:
-                module.exit_json(changed=True, msg="Router scaled successfully")
+                module.exit_json(changed=True, msg=target + " scaled successfully")
             else:
-                module.fail_json(changed=False, cmd=cmd, rc=rc, stderr=err, stdout=resp, msg="Error scaling router")
+                module.fail_json(changed=False, cmd=cmd, rc=rc, stderr=err, stdout=resp, msg="Error scaling " + target)
 
     else:
         module.fail_json(changed=False, msg="Invalid Action")
