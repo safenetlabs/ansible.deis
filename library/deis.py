@@ -19,7 +19,8 @@ def main():
             scale=dict(type='str', required=False),
             source=dict(type='str', required=False),
             certfile=dict(type='str', required=False),
-            keyfile=dict(type='str', required=False)
+            keyfile=dict(type='str', required=False),
+            scheme=dict(type='str', default='http', required=False)
         )
     )
 
@@ -36,6 +37,7 @@ def main():
     source = module.params['source']
     certfile = module.params['certfile']
     keyfile = module.params['keyfile']
+    scheme = module.params['scheme']
     deis = "/opt/bin/deis"
 
     if action == '':
@@ -59,7 +61,7 @@ def main():
         if username is None or password is None or email is None:
             module.fail_json(msg="Username, password or email not provided")
         else:
-            full_action = "auth:register deis." + domain
+            full_action = "auth:register {}://deis.{}".format(scheme, domain)
             cmd = deis + " " + full_action + " --username=" + username + " --password=" + password + " --email=" + email
             rc, resp, err = module.run_command(cmd)
 
