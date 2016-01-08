@@ -19,7 +19,8 @@ def main():
             scale=dict(type='str', required=False),
             source=dict(type='str', required=False),
             certfile=dict(type='str', required=False),
-            keyfile=dict(type='str', required=False)
+            keyfile=dict(type='str', required=False),
+            version=dict(type='str', required=False)
         )
     )
 
@@ -36,6 +37,7 @@ def main():
     source = module.params['source']
     certfile = module.params['certfile']
     keyfile = module.params['keyfile']
+    version = module.params['version']
     deis = "/opt/bin/deis"
 
     if action == '':
@@ -43,17 +45,20 @@ def main():
 
     elif action == 'install_deis':
         if os.path.exists('/opt/bin/deis'):
-            module.exit_json(changed=False, msg="DEIS already installed")
-        else:
-            os.chdir('/opt/bin/')
-            urllib.urlretrieve('http://deis.io/deis-cli/install.sh', 'install.sh')
-            cmd = 'sh install.sh'
+            cmd = deis + ' --version'
             rc, resp, err = module.run_command(cmd)
-            os.remove('/opt/bin/install.sh')
-            if rc == 0:
-                module.exit_json(changed=True, msg="DEIS installed successfully")
+            if resp.strip() == version:
+                module.exit_json(changed=False, msg="DEIS version-" + version + " already installed")
             else:
-                module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while installing DEIS")
+                os.chdir('/opt/bin/')
+                urllib.urlretrieve('http://deis.io/deis-cli/install.sh', 'install.sh')
+                cmd = 'sh install.sh ' + version
+                rc, resp, err = module.run_command(cmd)
+                os.remove('/opt/bin/install.sh')
+                if rc == 0:
+                    module.exit_json(changed=True, msg="DEIS version-" + version + " installed successfully")
+                else:
+                    module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while installing DEIS")
 
     elif action == 'register':
         if username is None or password is None or email is None:
