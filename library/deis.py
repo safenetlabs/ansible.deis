@@ -21,7 +21,6 @@ def main():
             certfile=dict(type='str', required=False),
             keyfile=dict(type='str', required=False),
             version=dict(type='str', required=False)
-            scheme=dict(type='str', default='http', required=False)
         )
     )
 
@@ -39,7 +38,6 @@ def main():
     certfile = module.params['certfile']
     keyfile = module.params['keyfile']
     version = module.params['version']
-    scheme = module.params['scheme']
     deis = "/opt/bin/deis"
 
     if action == '':
@@ -66,7 +64,7 @@ def main():
         if username is None or password is None or email is None:
             module.fail_json(msg="Username, password or email not provided")
         else:
-            full_action = "auth:register {}://deis.{}".format(scheme, domain)
+            full_action = "auth:register deis." + domain
             cmd = deis + " " + full_action + " --username=" + username + " --password=" + password + " --email=" + email
             rc, resp, err = module.run_command(cmd)
 
@@ -145,7 +143,7 @@ def main():
             input_vars_dict = dict(var.split('=', 1) for var in input_vars_list)
 
             deis_vars_list = resp.splitlines()
-            deis_vars_dict = dict(var.split() for var in deis_vars_list)
+            deis_vars_dict = dict(var.split(' ', 1) for var in deis_vars_list)
 
             set_cmd = deis + " config:set "
             unset_cmd = deis + " config:unset "
@@ -155,7 +153,7 @@ def main():
             unset_rc = 0
 
             for key, val in input_vars_dict.iteritems():
-                if key not in deis_vars_dict or deis_vars_dict[key] != val.strip():
+                if key not in deis_vars_dict or deis_vars_dict[key].strip() != val.strip():
                     if key == "SSH_KEY" and key in deis_vars_dict:
                         continue
                     set_cmd += key + '=' + val + ' '
