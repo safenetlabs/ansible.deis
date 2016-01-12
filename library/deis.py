@@ -153,7 +153,12 @@ def main():
             unset_rc = 0
 
             for key, val in input_vars_dict.iteritems():
-                if key not in deis_vars_dict or deis_vars_dict[key].strip() != val.strip():
+                val = val.strip()
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    compare_val = val[1:-1]
+                else:
+                    compare_val = val
+                if key not in deis_vars_dict or deis_vars_dict[key].strip() != compare_val:
                     if key == "SSH_KEY" and key in deis_vars_dict:
                         continue
                     set_cmd += key + '=' + val + ' '
