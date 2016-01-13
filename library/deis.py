@@ -153,14 +153,25 @@ def main():
             unset_rc = 0
 
             for key, val in input_vars_dict.iteritems():
+                # To handle case where val contains quotes
                 val = val.strip()
                 if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                     compare_val = val[1:-1]
+                elif ' ' in val:
+                        val = "'" + val + "'"
                 else:
                     compare_val = val
                 if key not in deis_vars_dict or deis_vars_dict[key].strip() != compare_val:
+                    # Skipping the check for ssh_key as it is encoded when set and 
+                    # never macthes with the original value
                     if key == "SSH_KEY" and key in deis_vars_dict:
                         continue
+                    # To handle val == spaces
+                    if val == '':
+                        val = "' '"
+                    # To handle case where val contains strings separated by spaces
+                    elif (' ' in val) and not (val.startswith('"') and val.endswith('"')) and not (val.startswith("'") and val.endswith("'")):
+                        val = "'" + val + "'"
                     set_cmd += key + '=' + val + ' '
                     set_changes = True
 
