@@ -2,7 +2,6 @@
 import os
 import urllib
 
-
 def main():
 
     module = AnsibleModule(
@@ -15,13 +14,15 @@ def main():
             app=dict(type='str', required=False),
             app_name_for_domain=dict(type='str', required=False),
             config_vars=dict(type='str', required=False),
+            config_dict=dict(type='dict', required=False),
             app_ver=dict(type='str', required=False),
             scale=dict(type='str', required=False),
             source=dict(type='str', required=False),
             certfile=dict(type='str', required=False),
             keyfile=dict(type='str', required=False),
             version=dict(type='str', required=False)
-        )
+        ),
+        supports_check_mode=True
     )
 
     action = module.params['action']
@@ -32,6 +33,7 @@ def main():
     app_name_for_domain = module.params['app_name_for_domain']
     app = module.params['app']
     config_vars = module.params['config_vars']
+    config_dict = module.params['config_dict']
     app_ver = module.params['app_ver']
     scale = module.params['scale']
     source = module.params['source']
@@ -42,6 +44,9 @@ def main():
 
     if action == '':
         module.fail_json(msg="No action provided")
+
+    if module.check_mode and action not in ['configure']:
+        module.exit_json(msg="Check mode not supported for this configuration.")
 
     elif action == 'install_deis':
         if os.path.exists('/opt/bin/deis'):
@@ -132,72 +137,60 @@ def main():
                 module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while creating " + app)
 
     elif action == 'configure':
-        if app is None or config_vars is None:
+        set_keys = []
+        unset_keys = []
+        if not app or (not config_vars and not config_dict ):
             module.fail_json(msg="App Name or/and config variables not provided")
+
+        list_cmd = deis + " config:list -a " + app
+        rc, resp, err = module.run_command(list_cmd)
+        resp = resp[resp.index('\n')+1:]
+
+        if config_dict:
+            input_vars_dict = config_dict
         else:
-            list_cmd = deis + " config:list -a " + app
-            rc, resp, err = module.run_command(list_cmd)
-            resp = resp[resp.index('\n')+1:]
+            input_vars_dict = dict([s.strip() for s in var.split('=', 1)] for var in config_vars.split('\\\n'))
+        # Convert values to strings
+        input_vars_dict = {k: str(v) for (k,v) in input_vars_dict.iteritems()}
 
-            input_vars_list = config_vars.split('\\\n')
-            input_vars_dict = dict(var.split('=', 1) for var in input_vars_list)
+        deis_vars_list = resp.splitlines()
+        deis_vars_dict = dict([s.strip() for s in var.split(' ', 1)] for var in deis_vars_list)
 
-            deis_vars_list = resp.splitlines()
-            deis_vars_dict = dict(var.split(' ', 1) for var in deis_vars_list)
+        set_cmd = deis + " config:set "
+        unset_cmd = deis + " config:unset "
+        set_rc = 0
+        unset_rc = 0
 
-            set_cmd = deis + " config:set "
-            unset_cmd = deis + " config:unset "
-            set_changes = False
-            unset_changes = False
-            set_rc = 0
-            unset_rc = 0
+        for key, val in input_vars_dict.iteritems():
+            if key not in deis_vars_dict or deis_vars_dict[key] != val:
+                if key == "SSH_KEY" and key in deis_vars_dict:
+                    continue
+                set_cmd += key + '=' + val + ' '
+                set_keys.append(key)
 
-            for key, val in input_vars_dict.iteritems():
-                # To handle case where val contains quotes
-                val = val.strip()
-                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-                    compare_val = val[1:-1]
-                elif ' ' in val:
-                        val = "'" + val + "'"
-                else:
-                    compare_val = val
-                if key not in deis_vars_dict or deis_vars_dict[key].strip() != compare_val:
-                    # Skipping the check for ssh_key as it is encoded when set and 
-                    # never macthes with the original value
-                    if key == "SSH_KEY" and key in deis_vars_dict:
-                        continue
-                    # To handle val == spaces
-                    if val == '':
-                        val = "' '"
-                    # To handle case where val contains strings separated by spaces
-                    elif (' ' in val) and not (val.startswith('"') and val.endswith('"')) and not (val.startswith("'") and val.endswith("'")):
-                        val = "'" + val + "'"
-                    set_cmd += key + '=' + val + ' '
-                    set_changes = True
+        for key, val in deis_vars_dict.iteritems():
+            if key not in input_vars_dict:
+                unset_cmd += key + ' '
+                unset_keys.append(key)
 
-            for key, val in deis_vars_dict.iteritems():
-                if key not in input_vars_dict:
-                    unset_cmd += key + ' '
-                    unset_changes = True
+        if set_keys and not module.check_mode:
+            set_cmd += '-a ' + app
+            set_rc, resp, err = module.run_command(set_cmd)
+            if set_rc != 0:
+               module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while setting configuration variables")
 
-            if set_changes:
-                set_cmd += '-a ' + app
-                set_rc, resp, err = module.run_command(set_cmd)
-                if set_rc != 0:
-                   module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while setting configuration variables")
+        if unset_keys and not module.check_mode:
+            unset_cmd += '-a ' + app
+            unset_rc, resp, err = module.run_command(unset_cmd)
+            if unset_rc != 0:
+               module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while unsetting configuration variables")
 
-            if unset_changes:
-                unset_cmd += '-a ' + app
-                unset_rc, resp, err = module.run_command(unset_cmd)
-                if unset_rc != 0:
-                   module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while unsetting configuration variables")
-
-            if not set_changes and not unset_changes:
-                module.exit_json(changed=False, msg="Configuration up-to-date")
-            elif set_rc == 0 and unset_rc == 0:
-                module.exit_json(changed=True, msg=app + " configured Successfully")
-            else:
-                module.fail_json(changed=False, msg="Error occurred while configuring " + app)
+        if not set_keys and not unset_keys:
+            module.exit_json(changed=False, msg="Configuration up-to-date")
+        elif set_rc == 0 and unset_rc == 0:
+            module.exit_json(changed=True, msg=app + " configured Successfully", set_keys=set_keys, unset_keys=unset_keys)
+        else:
+            module.fail_json(changed=False, msg="Error occurred while configuring " + app, set_keys=set_keys, unset_keys=unset_keys)
 
     elif action == 'pull':
         if app is None or app_ver is None or source is None:
