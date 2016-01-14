@@ -2,6 +2,10 @@
 import os
 import urllib
 
+import time
+
+last_command_time = 0
+
 def main():
 
     module = AnsibleModule(
@@ -24,6 +28,23 @@ def main():
         ),
         supports_check_mode=True
     )
+
+    def run_deis_command(args, pause=False, **kwargs):
+        """A wrapper for AnsibleModules.run_command.  Adds an option keyword "pause".
+        If set to true, and if a "pause=True" command ran less than 20 seconds ago,
+        this sleeps for 20 second before running the command.
+
+        This tries to put some buffer time between calls to deis which redeploy apps.
+        I have a theory that if you redeploy the same app too quickly, some of deis'
+        state gets inconsistent.
+        """
+        global last_command_time
+        if pause and (time.time() - last_command_time) < 20:
+            time.sleep(20)
+        ret = module.run_command(args, **kwargs )
+        if pause:
+            last_command_time = time.time()
+        return ret
 
     action = module.params['action']
     username = module.params['username']
@@ -175,13 +196,13 @@ def main():
 
         if set_keys and not module.check_mode:
             set_cmd += '-a ' + app
-            set_rc, resp, err = module.run_command(set_cmd)
+            set_rc, resp, err = run_deis_command(set_cmd, pause=True)
             if set_rc != 0:
                module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while setting configuration variables")
 
         if unset_keys and not module.check_mode:
             unset_cmd += '-a ' + app
-            unset_rc, resp, err = module.run_command(unset_cmd)
+            unset_rc, resp, err = run_deis_command(unset_cmd, pause=True)
             if unset_rc != 0:
                module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while unsetting configuration variables")
 
