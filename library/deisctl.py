@@ -12,7 +12,8 @@ def main():
             units=dict(type='str', required=False),
             target=dict(type='str', required=False),
             config=dict(type='dict', required=False),
-        )
+        ),
+            supports_check_mode=True
     )
 
     action = module.params['action']
@@ -23,6 +24,9 @@ def main():
     target = module.params['target']
     config = module.params['config']
     deisctl = "/opt/bin/deisctl"
+
+    if module.check_mode and action not in ['configure', 'scale']:
+        module.exit_json(msg="Check mode not supported for this action.", skipped=True)
 
     if action == '':
         module.fail_json(msg="No action provided")
@@ -39,18 +43,19 @@ def main():
         if target is None:
             module.fail_json(msg="target not provided")
         else:
-            is_changed = False
+            changed = []
             for key, val in config.iteritems():
                 get_config = deisctl + ' config ' + target + ' get ' + key
                 rc, resp, err = module.run_command(get_config)
                 if resp.rstrip() != val:
                     cmd = deisctl + ' config ' + target + ' set ' + key + '=' + val
-                    rc, resp, err = module.run_command(cmd)
-                    if rc != 0:
-                        module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while configuring platform")
-                    is_changed = True
+                    if not module.check_mode:
+                        rc, resp, err = module.run_command(cmd)
+                        if rc != 0:
+                            module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while configuring platform")
+                    changed.append(key)
 
-            if is_changed:
+            if changed:
                 module.exit_json(changed=True, msg="Platform configured successfully")
             else:
                 module.exit_json(changed=False, msg="Configuration up-to-date")
@@ -79,14 +84,18 @@ def main():
     elif action == 'scale':
         if target is None or units is None:
             module.fail_json(msg="target or/and units not provided")
-        else:
+        _, resp, _ = module.run_command(deisctl + ' list')
+        current_count = len([l for l in resp.splitlines() if "deis-" + target in l])
+        if str(current_count) == units:
+            module.exit_json(changed=False, msg="Scale already correct.", target=target, scale=current_count)
+        if not module.check_mode:
             cmd = deisctl + ' scale ' + target + '=' + units
             rc, resp, err = module.run_command(cmd)
-
-            if rc == 0:
-                module.exit_json(changed=True, msg=target + " scaled successfully")
-            else:
+            if rc != 0:
                 module.fail_json(changed=False, cmd=cmd, rc=rc, stderr=err, stdout=resp, msg="Error scaling " + target)
+
+        module.exit_json(changed=True, msg=target + " scaled successfully", prior_scale=current_count, scale=units)
+
 
     else:
         module.fail_json(changed=False, msg="Invalid Action")
