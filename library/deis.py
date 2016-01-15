@@ -67,7 +67,7 @@ def main():
     if action == '':
         module.fail_json(msg="No action provided")
 
-    if module.check_mode and action not in ['configure', 'install_deis', 'scale', 'pull', 'create']:
+    if module.check_mode and action not in ['configure', 'install_deis', 'scale', 'pull', 'create', 'domain']:
         module.exit_json(msg="Check mode not supported for this configuration.")
 
     elif action == 'install_deis':
@@ -264,7 +264,8 @@ def main():
                 module.exit_json(changed=False, msg="Domain " + app_domain + " already exists for " + app)
             else:
                 cmd = deis + " domains:add " + app_domain + " -a " + app
-                rc, resp, err = module.run_command(cmd)
+                if not module.check_mode:
+                    rc, resp, err = module.run_command(cmd)
                 if rc == 0:
                     module.exit_json(changed=True, msg="Domain " + app_domain + " added successfully for " + app)
                 else:
