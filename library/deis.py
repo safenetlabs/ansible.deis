@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import os
+import re
 import urllib
 
 import time
@@ -66,7 +67,7 @@ def main():
     if action == '':
         module.fail_json(msg="No action provided")
 
-    if module.check_mode and action not in ['configure']:
+    if module.check_mode and action not in ['configure', 'install_deis', 'scale', 'pull', 'create']:
         module.exit_json(msg="Check mode not supported for this configuration.")
 
     elif action == 'install_deis':
@@ -75,16 +76,17 @@ def main():
             rc, resp, err = module.run_command(cmd)
             if resp.strip() == version:
                 module.exit_json(changed=False, msg="DEIS version-" + version + " already installed")
-            else:
-                os.chdir('/opt/bin/')
-                urllib.urlretrieve('http://deis.io/deis-cli/install.sh', 'install.sh')
-                cmd = 'sh install.sh ' + version
-                rc, resp, err = module.run_command(cmd)
-                os.remove('/opt/bin/install.sh')
-                if rc == 0:
-                    module.exit_json(changed=True, msg="DEIS version-" + version + " installed successfully")
-                else:
-                    module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while installing DEIS")
+        if module.check_mode:
+            module.exit_json(changed=True,msg="Will install DEIS version-" + version)
+        os.chdir('/opt/bin/')
+        urllib.urlretrieve('http://deis.io/deis-cli/install.sh', 'install.sh')
+        cmd = 'sh install.sh ' + version
+        rc, resp, err = module.run_command(cmd)
+        os.remove('/opt/bin/install.sh')
+        if rc == 0:
+            module.exit_json(changed=True, msg="DEIS version-" + version + " installed successfully")
+        else:
+            module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while installing DEIS")
 
     elif action == 'register':
         if username is None or password is None or email is None:
@@ -145,17 +147,24 @@ def main():
     elif action == 'create':
         if app is None:
             module.fail_json(msg="App name not provided")
-        else:
-            cmd = deis + " apps:create --no-remote " + app
+        if module.check_mode:
+            cmd = deis + " apps"
             rc, resp, err = module.run_command(cmd)
-
-            if rc == 0:
-                module.exit_json(changed=True, msg=app + " created successfully", stdout=resp)
-
-            if "This field must be unique" in err:
+            if app in resp.splitlines():
                 module.exit_json(changed=False, msg=app + " already exists")
             else:
-                module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while creating " + app)
+                module.exit_json(changed=True, msg="Will create " + app)
+
+        cmd = deis + " apps:create --no-remote " + app
+        rc, resp, err = module.run_command(cmd)
+
+        if rc == 0:
+            module.exit_json(changed=True, msg=app + " created successfully", stdout=resp)
+
+        if "This field must be unique" in err:
+            module.exit_json(changed=False, msg=app + " already exists")
+        else:
+            module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while creating " + app)
 
     elif action == 'configure':
         set_keys = []
@@ -196,13 +205,15 @@ def main():
 
         if set_keys and not module.check_mode:
             set_cmd += '-a ' + app
-            set_rc, resp, err = run_deis_command(set_cmd, pause=True)
+            # set_rc, resp, err = run_deis_command(set_cmd, pause=True)
+            set_rc, resp, err = module.run_command(set_cmd)
             if set_rc != 0:
                module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while setting configuration variables")
 
         if unset_keys and not module.check_mode:
             unset_cmd += '-a ' + app
-            unset_rc, resp, err = run_deis_command(unset_cmd, pause=True)
+            unset_rc, resp, err = module.run_command(unset_cmd)
+            # unset_rc, resp, err = run_deis_command(unset_cmd, pause=True)
             if unset_rc != 0:
                module.fail_json(changed=False, rc=rc, stdout=resp, stderr=err, msg="Error occurred while unsetting configuration variables")
 
@@ -229,10 +240,11 @@ def main():
 
             if ver_deployed is None or ver_deployed != app_ver:
                 cmd = deis + " pull " + source + " -a " + app
-                rc, resp, err = module.run_command(cmd)
+                if not module.check_mode:
+                    rc, resp, err = module.run_command(cmd)
 
                 if rc == 0:
-                    module.exit_json(changed=True, msg=app + " deployed successfully")
+                    module.exit_json(changed=True, msg=app + " deployed from " + str(ver_deployed) + " to " + str(app_ver) + " successfully")
                 else:
                     module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while deploying " + app)
             else:
@@ -271,10 +283,11 @@ def main():
                 module.exit_json(changed=False, msg="Number of containers for " +  app + " is already " + str(scale))
             else:
                 cmd = deis + " scale cmd=" + str(scale) + " -a " + app
-                rc, resp, err = module.run_command(cmd)
+                if not module.check_mode:
+                    rc, resp, err = module.run_command(cmd)
 
                 if rc == 0:
-                    module.exit_json(changed=True, msg=app + " scaled to " + str(scale) + " successfully")
+                    module.exit_json(changed=True, msg=app + " scaled from " + str(containers) + " to " + str(scale) + " successfully")
                 else:
                     module.fail_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while scaling " + app)
 
@@ -329,13 +342,8 @@ def main():
 
 
 def __count_container(info, app):
-    containers = 0
     info = info[info.index('=== ' + app + ' Processes'):info.index('=== ' + app + ' Domains')]
-    info_list = info.split('\n')
-    for info in info_list:
-        if "up" in info:
-            containers += 1
-    return containers
+    return len([l for l in info.splitlines() if re.match("^cmd.\d+ ((up)|(down))", l)])
 
 
 # import module snippets
