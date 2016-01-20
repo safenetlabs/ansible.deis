@@ -227,7 +227,7 @@ def main():
                 if key == "SSH_KEY" and key in deis_vars_dict:
                     continue
                 set_cmd += key + '=' + val + ' '
-                set_keys.append(key)
+                set_keys.append(dict(key=key, oldval=deis_vars_dict[key], newval=val))
 
         for key, val in deis_vars_dict.iteritems():
             if key not in input_vars_dict:

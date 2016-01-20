@@ -47,16 +47,17 @@ def main():
             for key, val in config.iteritems():
                 get_config = deisctl + ' config ' + target + ' get ' + key
                 rc, resp, err = module.run_command(get_config)
-                if resp.rstrip() != val:
+                oldval = resp.rstrip()
+                if oldval != val:
                     cmd = deisctl + ' config ' + target + ' set ' + key + '=' + val
                     if not module.check_mode:
                         rc, resp, err = module.run_command(cmd)
                         if rc != 0:
                             module.exit_json(changed=False, cmd=cmd, rc=rc, stdout=resp, stderr=err, msg="Error occurred while configuring platform")
-                    changed.append(key)
+                    changed.append(dict(key=key, oldval=oldval, newval=val))
 
             if changed:
-                module.exit_json(changed=True, msg="Platform configured successfully")
+                module.exit_json(changed=True, msg="Platform configured successfully", changes=changed)
             else:
                 module.exit_json(changed=False, msg="Configuration up-to-date")
 
