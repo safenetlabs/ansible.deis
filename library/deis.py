@@ -223,12 +223,7 @@ def main():
         unset_rc = 0
 
         for key, val in input_vars_dict.iteritems():
-            # Strip out beginning/ending quotes for comparison only
-            tval = val
-            if tval.startswith("'") or tval.startswith('"'):
-                if tval.endswith("'") or tval.endswith('"'):
-                    tval = tval[1:-1]
-            if key not in deis_vars_dict or deis_vars_dict[key] != tval:
+            if key not in deis_vars_dict or deis_vars_dict[key] != val:
                 if key == "SSH_KEY" and key in deis_vars_dict:
                     continue
                 set_cmd += '"{}={}" '.format(key, val)
